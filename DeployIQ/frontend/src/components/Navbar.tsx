@@ -2,12 +2,22 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Menu, X } from "lucide-react";
+import { Menu, X, LogOut } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAuthStore } from "../store/useAuthStore";
+import { useRouter } from "next/navigation";
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { isAuthenticated, logout, user } = useAuthStore();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    logout();
+    router.push("/auth/login");
+    setSidebarOpen(false);
+  };
 
   return (
     <>
@@ -27,9 +37,26 @@ export default function Navbar() {
             <h2 className="text-2xl font-bold text-blue-400 mb-6">DeployIQ</h2>
             <nav className="space-y-4">
               <NavLink href="/" onClick={() => setSidebarOpen(false)}>Home</NavLink>
-              <NavLink href="/deploy" onClick={() => setSidebarOpen(false)}>Deploy</NavLink>
-              <NavLink href="/logs" onClick={() => setSidebarOpen(false)}>Logs</NavLink>
-              <NavLink href="/settings" onClick={() => setSidebarOpen(false)}>Settings</NavLink>
+              {isAuthenticated && (
+                <>
+                  <NavLink href="/deploy" onClick={() => setSidebarOpen(false)}>Deploy</NavLink>
+                  <NavLink href="/logs" onClick={() => setSidebarOpen(false)}>Logs</NavLink>
+                  <NavLink href="/settings" onClick={() => setSidebarOpen(false)}>Settings</NavLink>
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center w-full px-6 py-3 text-lg font-semibold text-red-400 hover:bg-gray-700 hover:text-red-300 rounded-md transition duration-300 ease-in-out shadow-sm"
+                  >
+                    <LogOut className="w-5 h-5 mr-2" />
+                    Logout
+                  </button>
+                </>
+              )}
+              {!isAuthenticated && (
+                <>
+                  <NavLink href="/auth/login" onClick={() => setSidebarOpen(false)}>Login</NavLink>
+                  <NavLink href="/auth/signup" onClick={() => setSidebarOpen(false)}>Sign Up</NavLink>
+                </>
+              )}
             </nav>
           </motion.aside>
         )}
@@ -42,21 +69,35 @@ export default function Navbar() {
           <button onClick={() => setSidebarOpen(true)} className="md:hidden">
             <Menu className="w-8 h-8 text-blue-400" />
           </button>
-          
+
           {/* Logo - Hidden when Sidebar is Open */}
           {!sidebarOpen && (
             <Link href="/" className="text-3xl font-extrabold tracking-wide text-blue-400 hover:text-blue-300 transition duration-300">
               DeployIQ
             </Link>
           )}
-          
+
           {/* Desktop Menu */}
-          <div className="hidden md:flex space-x-8">
+          <div className="hidden md:flex items-center space-x-8">
             <NavLink href="/">Home</NavLink>
-            <NavLink href="/dashboard">Dashboard</NavLink>
-            <NavLink href="/deploy">Deploy</NavLink>
-            <NavLink href="/monitor">Monitor</NavLink>
-            
+            {isAuthenticated ? (
+              <>
+                <NavLink href="/dashboard">Dashboard</NavLink>
+                <NavLink href="/deploy">Deploy</NavLink>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center px-6 py-3 text-lg font-semibold text-red-400 hover:bg-gray-700 hover:text-red-300 rounded-md transition duration-300 ease-in-out shadow-sm"
+                >
+                  <LogOut className="w-5 h-5 mr-2" />
+                  Logout
+                </button>
+              </>
+            ) : (
+              <>
+                <NavLink href="/auth/login">Login</NavLink>
+                <NavLink href="/auth/signup">Sign Up</NavLink>
+              </>
+            )}
           </div>
         </div>
       </nav>

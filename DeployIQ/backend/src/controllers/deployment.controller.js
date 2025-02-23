@@ -129,5 +129,31 @@ const getDeploymentOptions = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
+const getDeployedModels = async (req, res) => {
+  try {
+    const userId = req.user.userId;
 
-export default { deployModel, invokeModel, getDeploymentOptions };
+    // Fetch all deployments for the user
+    const deployments = await prisma.deployment.findMany({
+      where: {
+        userId: userId
+      }
+    });
+
+    // Transform the deployments data to match the frontend expectations
+    const transformedDeployments = deployments.map(deployment => ({
+      id: deployment.id.toString(),
+      modelName: deployment.modelName,
+      apiKey: deployment.apiKey,
+      apiUrl: deployment.apiUrl,
+      status: deployment.status,
+      deployedAt: deployment.createdAt.toISOString(),
+    }));
+
+    res.status(200).json(transformedDeployments);
+  } catch (error) {
+    console.error("Error fetching deployed models:", error);
+    res.status(500).json({ error: "Failed to fetch deployed models" });
+  }
+};
+export default { deployModel, invokeModel, getDeploymentOptions ,getDeployedModels};

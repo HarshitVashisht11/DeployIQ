@@ -15,16 +15,6 @@ export default function Dashboard({ children }: { children: React.ReactNode }) {
           <div className="flex-1">{children}</div>
 
           {/* Side Cards */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5 }}
-            className="w-80 space-y-4 ml-6"
-          >
-            <ModelCard name="Llama 3" description="Advanced NLP model." status="deployed" />
-            <ModelCard name="Mistral" description="Optimized for inference." status="pending" />
-            <ModelCard name="Falcon" description="High-performance AI." status="failed" />
-          </motion.div>
         </div>
       </div>
     </div>

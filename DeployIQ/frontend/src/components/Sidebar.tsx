@@ -3,14 +3,13 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { LayoutDashboard, BarChart, Cpu, Activity, Settings, Boxes } from "lucide-react";
+import { LayoutDashboard, BarChart, Cpu, Activity, Settings, Boxes, Trash } from "lucide-react";
 
 const menuItems = [
   { name: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
-  { name: "Analytics", icon: BarChart, path: "/dashboard/analytics" },
   { name: "Models", icon: Cpu, path: "/dashboard/models" },
   { name: "Activity", icon: Activity, path: "/dashboard/activity" },
-  { name: "Settings", icon: Settings, path: "/dashboard/settings" },
+  { name: "Invoke or Delete Model", icon: Trash, path: "/dashboard/invoke" },
 ];
 
 export default function Sidebar() {

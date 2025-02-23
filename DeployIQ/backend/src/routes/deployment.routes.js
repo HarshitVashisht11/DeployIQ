@@ -2,7 +2,7 @@ import { Router } from "express";
 const router = Router();
 
 import deploymentController from "../controllers/deployment.controller.js";
-const { deployModel, invokeModel, getDeploymentOptions } = deploymentController;
+const { deployModel, invokeModel, getDeploymentOptions, getDeployedModels } = deploymentController;
 
 import pkg from 'jsonwebtoken';
 const { verify } = pkg;
@@ -21,13 +21,12 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Deploy model using AWS Bedrock (protected endpoint)
+// Existing routes
 router.post("/", authenticateToken, deployModel);
-
-// Invoke deployed model (authentication via API key header 'x-api-key')
 router.post("/invoke/:userId/:modelName", invokeModel);
-
-// Get available deployment options (e.g., models and regions)
 router.get("/options", getDeploymentOptions);
+
+// New route to fetch deployed models
+router.get("/models", authenticateToken, getDeployedModels);
 
 export default router;

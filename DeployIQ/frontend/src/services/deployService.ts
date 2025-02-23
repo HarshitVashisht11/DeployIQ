@@ -1,100 +1,119 @@
-"use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/deploy"; // NestJS backend
+const API_URL = "http://localhost:5000/api"; 
 
-// Deploy a model with selected options
-export const deployModel = async ({
-  model,
-  cloudProvider,
-  instanceType,
-  replicas,
-  inferenceBackend,
-  useGPU,
-  customConfig,
-}: {
-  model: string;
-  cloudProvider: "AWS" | "GCP" | "Azure" | "Bare-metal" | "Local";
-  instanceType: string;
-  replicas: number;
-  inferenceBackend: "vLLM" | "TGI" | "HuggingFace";
-  useGPU: boolean;
-  customConfig?: Record<string, any>;
-}) => {
+export interface DeploymentOptions {
+  models: string[];
+  regions: string[];
+}
+
+export interface DeployResponse {
+  success: boolean;
+  data?: {
+    apiKey: string;
+    apiUrl: string;
+    message: string;
+  };
+  message?: string;
+}
+export interface InvokeResponse {
+  success: boolean;
+  output?: string;
+  message?: string;
+}
+
+// Helper function to get token from auth store
+const getAuthToken = () => {
+  // Get auth state from localStorage
+  const authState = localStorage.getItem('auth-storage');
+  if (!authState) return null;
+  
   try {
-    const response = await fetch(`${API_BASE_URL}/start`, {
+    const { state } = JSON.parse(authState);
+    return state.token;
+  } catch (e) {
+    return null;
+  }
+};
+
+export async function deployModel({ model }: { model: string }): Promise<DeployResponse> {
+  try {
+    const token = getAuthToken();
+    if (!token) {
+      throw new Error("Authentication required");
+    }
+
+    const response = await fetch(`${API_URL}/deploy`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
       },
       body: JSON.stringify({
-        model,
-        cloudProvider,
-        instanceType,
-        replicas,
-        inferenceBackend,
-        useGPU,
-        customConfig,
-      }),
+        modelName: model
+      })
     });
 
-    if (!response.ok) throw new Error("Failed to deploy model");
-    return await response.json();
-  } catch (error) {
-    console.error("Error deploying model:", error);
-    throw error;
-  }
-};
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Deployment failed");
+    }
 
-// Get real-time deployment status
-export const getDeploymentStatus = async (deploymentId: string) => {
+    const data = await response.json();
+    return { 
+      success: true, 
+      data: {
+        apiKey: data.apiKey,
+        apiUrl: data.apiUrl,
+        message: data.message
+      } 
+    };
+  } catch (error: any) {
+    console.error("Deploy error:", error);
+    return { success: false, message: error.message };
+  }
+}
+
+export async function getDeploymentOptions(): Promise<DeploymentOptions> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error("Authentication required");
+  }
+
   try {
-    const response = await fetch(`${API_BASE_URL}/status/${deploymentId}`, {
-      method: "GET",
+    const response = await fetch(`${API_URL}/deploy/options`, {
+      headers: {
+        "Authorization": `Bearer ${token}`
+      }
     });
-
-    if (!response.ok) throw new Error("Failed to fetch status");
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to fetch deployment options");
+    }
+    
     return await response.json();
-  } catch (error) {
-    console.error("Error fetching deployment status:", error);
-    throw error;
+  } catch (error: any) {
+    console.error("Options error:", error);
+    throw new Error("Failed to fetch deployment options");
   }
-};
-
-// Stop a running deployment
-export const stopDeployment = async (deploymentId: string) => {
+}
+export const invokeModel = async (userId: number, modelName: string, input: string) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/stop`, {
+    const response = await fetch(`/api/deploy/invoke/${userId}/${modelName}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "x-api-key": "YOUR_API_KEY_HERE", // Replace with actual API key
       },
-      body: JSON.stringify({ deploymentId }),
+      body: JSON.stringify({ input, maxTokens: 50, temperature: 0.7 }),
     });
 
-    if (!response.ok) throw new Error("Failed to stop deployment");
+    if (!response.ok) {
+      throw new Error(`Error: ${response.statusText}`);
+    }
+
     return await response.json();
   } catch (error) {
-    console.error("Error stopping deployment:", error);
-    throw error;
-  }
-};
-
-// Redeploy a model (restart with updated settings)
-export const redeployModel = async (deploymentId: string, newConfig: object) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/redeploy`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ deploymentId, ...newConfig }),
-    });
-
-    if (!response.ok) throw new Error("Failed to redeploy model");
-    return await response.json();
-  } catch (error) {
-    console.error("Error redeploying model:", error);
+    console.error("Error invoking model:", error);
     throw error;
   }
 };

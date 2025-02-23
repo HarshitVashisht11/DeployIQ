@@ -1,42 +1,107 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Loader2, CheckCircle, XCircle, Server, Cloud, Cpu } from "lucide-react";
-import { deployModel } from "../services/deployService";
+import { Loader2, CheckCircle, XCircle, Server, Cloud } from "lucide-react";
+import { deployModel, getDeploymentOptions, DeployResponse } from "../services/deployService";
+import { useRouter } from "next/navigation";
+import { useAuthStore } from "../store/useAuthStore";
 
 export default function DeployForm() {
-  const [model, setModel] = useState("");
-  const [customModel, setCustomModel] = useState("");
-  const [cloudProvider, setCloudProvider] = useState("AWS");
-  const [gpuInstance, setGpuInstance] = useState("auto");
+  const router = useRouter();
+  const { isAuthenticated, token } = useAuthStore();
+  const [modelOptions, setModelOptions] = useState<string[]>([]);
+  const [regions, setRegions] = useState<string[]>([]);
+  const [selectedModel, setSelectedModel] = useState("");
+  const [selectedRegion, setSelectedRegion] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string>("");
+  const [deploymentDetails, setDeploymentDetails] = useState<{
+    apiKey?: string;
+    apiUrl?: string;
+  }>({});
 
-  const handleDeploy = async () => {
-    if (!model && !customModel) {
-      alert("Please select or enter a model to deploy.");
+  useEffect(() => {
+    // Check authentication immediately
+    if (!isAuthenticated) {
+      console.log("Not authenticated, redirecting to login");
+      router.push("/auth/login");
       return;
     }
+
+    const fetchOptions = async () => {
+      try {
+        setLoading(true);
+        const options = await getDeploymentOptions();
+        setModelOptions(options.models);
+        setRegions(options.regions);
+        if (options.regions.length > 0) {
+          setSelectedRegion(options.regions[0]);
+        }
+      } catch (err: any) {
+        console.error("Failed to fetch options:", err);
+        setError(err.message || "Failed to fetch deployment options");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOptions();
+  }, [isAuthenticated, router]);
+
+  const getModelDisplayName = (modelId: string) => {
+    if (modelId.includes("claude")) return "Claude - Advanced AI Assistant";
+    if (modelId.includes("llama")) return "Meta Llama - Open Source LLM";
+    return modelId;
+  };
+
+  const handleDeploy = async () => {
+    if (!selectedModel) {
+      setError("Please select a model to deploy.");
+      return;
+    }
+
+    if (!isAuthenticated) {
+      router.push("/auth/login");
+      return;
+    }
+    
     setLoading(true);
     setSuccess(false);
-    setError(false);
+    setError("");
+    setDeploymentDetails({});
 
     try {
-      await deployModel({ 
-        model: customModel || model, 
-        cloudProvider, 
-        gpuInstance
+      const response = await deployModel({ 
+        model: selectedModel,
       });
-      setSuccess(true);
-    } catch (err) {
-      setError(true);
+      
+      if (response.success && response.data) {
+        setSuccess(true);
+        setDeploymentDetails({
+          apiKey: response.data.apiKey,
+          apiUrl: response.data.apiUrl
+        });
+      } else {
+        throw new Error(response.message || "Deployment failed");
+      }
+    } catch (err: any) {
+      console.error("Deploy error:", err);
+      setError(err.message || "Deployment failed");
     } finally {
       setLoading(false);
     }
   };
 
+  // If still loading initial options, show loading state
+  if (loading && !modelOptions.length) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -65,60 +130,33 @@ export default function DeployForm() {
           </label>
           <select
             className="w-full p-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white transition-colors hover:border-blue-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 focus:outline-none"
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
           >
             <option value="">-- Choose a Model --</option>
-            <option value="Llama3">Llama 3 - Advanced NLP</option>
-            <option value="Mistral">Mistral - Efficient Inference</option>
-            <option value="Falcon">Falcon - High-Performance AI</option>
+            {modelOptions.map((model) => (
+              <option key={model} value={model}>
+                {getModelDisplayName(model)}
+              </option>
+            ))}
           </select>
-        </div>
-
-        <div className="space-y-2">
-          <label className="block font-medium text-gray-300 flex items-center gap-2">
-            <Server className="w-4 h-4 text-purple-400" />
-            Custom Model
-          </label>
-          <input
-            type="text"
-            className="w-full p-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white transition-colors hover:border-purple-400 focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 focus:outline-none"
-            placeholder="Enter custom model name"
-            value={customModel}
-            onChange={(e) => setCustomModel(e.target.value)}
-          />
         </div>
 
         <div className="space-y-2">
           <label className="block font-medium text-gray-300 flex items-center gap-2">
             <Cloud className="w-4 h-4 text-green-400" />
-            Cloud Provider
+            Region
           </label>
           <select
             className="w-full p-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white transition-colors hover:border-green-400 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 focus:outline-none"
-            value={cloudProvider}
-            onChange={(e) => setCloudProvider(e.target.value)}
+            value={selectedRegion}
+            onChange={(e) => setSelectedRegion(e.target.value)}
           >
-            <option value="AWS">AWS</option>
-            <option value="GCP">GCP</option>
-            <option value="Azure">Azure</option>
-            <option value="Bare-metal">Bare-metal</option>
-          </select>
-        </div>
-
-        <div className="space-y-2">
-          <label className="block font-medium text-gray-300 flex items-center gap-2">
-            <Cpu className="w-4 h-4 text-yellow-400" />
-            GPU Instance Type
-          </label>
-          <select
-            className="w-full p-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white transition-colors hover:border-yellow-400 focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 focus:outline-none"
-            value={gpuInstance}
-            onChange={(e) => setGpuInstance(e.target.value)}
-          >
-            <option value="auto">Auto-Select</option>
-            <option value="g5.2xlarge">AWS g5.2xlarge</option>
-            <option value="A100">GCP A100</option>
+            {regions.map((region) => (
+              <option key={region} value={region}>
+                {region}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -144,10 +182,24 @@ export default function DeployForm() {
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center justify-center text-green-400 mt-4 p-3 bg-green-400/10 rounded-lg"
+            className="flex flex-col items-center space-y-2 text-green-400 mt-4 p-3 bg-green-400/10 rounded-lg"
           >
-            <CheckCircle className="w-5 h-5 mr-2" /> 
-            Deployment Successful!
+            <div className="flex items-center">
+              <CheckCircle className="w-5 h-5 mr-2" /> 
+              Deployment Successful!
+            </div>
+            {deploymentDetails.apiKey && (
+              <div className="text-sm bg-gray-800 p-2 rounded w-full">
+                <div className="mb-1">
+                  <span className="font-semibold">API Key:</span>{" "}
+                  <code className="bg-gray-900 px-2 py-1 rounded">{deploymentDetails.apiKey}</code>
+                </div>
+                <div>
+                  <span className="font-semibold">API URL:</span>{" "}
+                  <code className="bg-gray-900 px-2 py-1 rounded">{deploymentDetails.apiUrl}</code>
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
 
@@ -158,7 +210,7 @@ export default function DeployForm() {
             className="flex items-center justify-center text-red-400 mt-4 p-3 bg-red-400/10 rounded-lg"
           >
             <XCircle className="w-5 h-5 mr-2" /> 
-            Deployment Failed
+            {error}
           </motion.div>
         )}
       </div>

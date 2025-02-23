@@ -1,10 +1,9 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { loginUser } from "../../../services/authService";
 import { motion } from "framer-motion";
-import { useAuthStore } from "../../../store/useAuthStore"; // Zustand store
+import { useAuthStore } from "../../../store/useAuthStore";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,24 +14,20 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      router.push("/deploy"); // Redirect if already logged in
+      router.push("/deploy");
     }
   }, [isAuthenticated, router]);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
 
-    try {
-      const response = await loginUser({ email, password });
-      if (response.success && response.data.token) {
-        login(response.data.user, response.data.token);
-        router.push("/deploy"); // Redirect after login
-      } else {
-        setError(response.message);
-      }
-    } catch (err) {
-      setError("Invalid credentials, please try again.");
+    const response = await loginUser({ email, password });
+    if (response.success && response.data.token) {
+      login(response.data.user, response.data.token);
+      router.push("/deploy");
+    } else {
+      setError(response.message || "Invalid credentials, please try again.");
     }
   };
 
@@ -72,7 +67,6 @@ export default function LoginPage() {
           <motion.button
             type="submit"
             className="w-full py-3 bg-blue-500 hover:bg-blue-600 rounded-lg text-lg font-semibold shadow-md transition-transform transform hover:scale-105"
-            whileHover={{ scale: 1.05 }}
           >
             Login
           </motion.button>
