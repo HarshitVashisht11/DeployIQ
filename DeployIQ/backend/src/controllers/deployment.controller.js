@@ -14,6 +14,12 @@ const bedrockClient = new BedrockRuntimeClient({
   },
 });
 
+// Define a token cost mapping per model (cost per token unit)
+const tokenCostMap = {
+  "anthropic.claude-3-haiku-20240307-v1:0": 2, // e.g., each token costs 2 credits
+  "meta.llama3-70b-instruct-v1:0": 1,           // each token costs 1 credit
+};
+
 const deployModel = async (req, res) => {
   try {
     const parsed = deploymentSchema.safeParse(req.body);
@@ -48,12 +54,13 @@ const deployModel = async (req, res) => {
 const invokeModel = async (req, res) => {
   try {
     const { userId, modelName } = req.params;
-    const { input } = req.body;
+    // Accept additional options for a more professional API call
+    const { input, maxTokens, temperature } = req.body;
     
-    // Convert userId from string to integer
+    // Convert userId from string to integer (if needed)
     const parsedUserId = parseInt(userId, 10);
     
-    // Validate API key by querying the database with the correct userId type
+    // Validate API key by querying the deployment record
     const deployment = await prisma.deployment.findFirst({
       where: { 
         userId: parsedUserId, 
@@ -64,10 +71,37 @@ const invokeModel = async (req, res) => {
       return res.status(403).json({ error: "Invalid API key" });
     }
     
-    // Invoke AWS Bedrock model as before
+    // Fetch user record to check available credits/tokens
+    const user = await prisma.user.findUnique({ where: { id: parsedUserId } });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    
+    // Determine the number of tokens requested (default to 50 if not provided)
+    const tokensRequested = maxTokens || 50;
+    const costPerToken = tokenCostMap[modelName] || 1;
+    const totalCost = tokensRequested * costPerToken;
+    
+    // Check if the user has enough credits
+    if (user.credits < totalCost) {
+      return res.status(402).json({ error: "Insufficient tokens/credits" });
+    }
+    
+    // Deduct credits from the user's balance
+    await prisma.user.update({
+      where: { id: parsedUserId },
+      data: { credits: { decrement: totalCost } },
+    });
+    
+    // Build the payload for AWS Bedrock including optional parameters
+    const payload = { prompt: input };
+    if (maxTokens) payload.max_gen_length = maxTokens;
+    if (temperature) payload.temperature = temperature;
+    
+    // Invoke the model using AWS Bedrock
     const command = new InvokeModelCommand({
       modelId: modelName,
-      body: JSON.stringify({ prompt: input }),
+      body: JSON.stringify(payload),
       contentType: "application/json",
     });
     const response = await bedrockClient.send(command);
@@ -80,11 +114,13 @@ const invokeModel = async (req, res) => {
   }
 };
 
-
 const getDeploymentOptions = async (req, res) => {
   try {
     const options = {
-      models: ["anthropic.claude-3-haiku-20240307-v1:0", "meta.llama3-70b-instruct-v1:0"],
+      models: [
+        "anthropic.claude-3-haiku-20240307-v1:0",
+        "meta.llama3-70b-instruct-v1:0"
+      ],
       regions: ["ap-south-1", "us-west-1"],
     };
     res.status(200).json(options);
